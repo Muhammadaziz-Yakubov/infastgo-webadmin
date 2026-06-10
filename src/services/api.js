@@ -75,6 +75,8 @@ export const api = {
 
   getLive: () => request('/admin/live'),
 
+  getRides: () => request('/admin/rides'),
+
   getPricing: () => request('/admin/pricing'),
 
   updatePricing: (pricingData) => request('/admin/pricing', {

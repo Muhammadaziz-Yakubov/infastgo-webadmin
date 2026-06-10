@@ -14,6 +14,12 @@ import {
   ShieldCheck,
   Send,
   Loader2,
+  History,
+  ChevronDown,
+  ChevronUp,
+  Phone,
+  Clock,
+  Route,
 } from 'lucide-react';
 import { api, setToken, getToken } from './services/api';
 import { io } from 'socket.io-client';
@@ -36,6 +42,8 @@ export default function App() {
   const [usersList, setUsersList] = useState([]);
   const [driversList, setDriversList] = useState([]);
   const [liveRides, setLiveRides] = useState([]);
+  const [ridesList, setRidesList] = useState([]);
+  const [expandedRide, setExpandedRide] = useState(null);
   const [pricing, setPricing] = useState({
     tariffs: {
       standart: { baseFare: 5000, pricePerKm: 1500 },
@@ -291,6 +299,8 @@ export default function App() {
       fetchLiveTracking();
     } else if (activeTab === 'pricing') {
       fetchPricingData();
+    } else if (activeTab === 'rides') {
+      fetchRidesData();
     }
   }, [isLoggedIn, activeTab]);
 
@@ -388,6 +398,15 @@ export default function App() {
     try {
       const res = await api.getPricing();
       if (res.success) setPricing(res.pricing);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchRidesData = async () => {
+    try {
+      const res = await api.getRides();
+      if (res.success) setRidesList(res.rides);
     } catch (err) {
       console.error(err);
     }
@@ -645,6 +664,18 @@ export default function App() {
             >
               <Activity size={18} />
               <span>Jonli Monitoring</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('rides')}
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition font-medium text-sm ${
+                activeTab === 'rides'
+                  ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 border border-transparent'
+              }`}
+            >
+              <History size={18} />
+              <span>Safarlar Tarixi</span>
             </button>
 
             <button
@@ -1467,6 +1498,300 @@ export default function App() {
                   {loading ? 'Yuborilmoqda...' : 'Push yuborish'}
                 </button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'rides' && (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">Safarlar Tarixi</h2>
+                <p className="text-slate-400 text-sm">Barcha safarlar bo'yicha to'liq ma'lumotlar</p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <span className="text-slate-500 text-sm">Jami: <b className="text-slate-200">{ridesList.length}</b> ta safar</span>
+                <button
+                  onClick={fetchRidesData}
+                  className="bg-slate-900 border border-slate-800 text-slate-300 py-2.5 px-4 rounded-xl hover:bg-slate-800 text-sm transition"
+                >
+                  Yangilash
+                </button>
+              </div>
+            </div>
+
+            {/* Status filter badges */}
+            <div className="flex flex-wrap gap-2">
+              {['all', 'completed', 'cancelled', 'searching', 'accepted', 'arriving', 'started'].map((st) => {
+                const count = st === 'all' ? ridesList.length : ridesList.filter(r => r.status === st).length;
+                const colors = {
+                  all: 'bg-slate-800 text-slate-200 border-slate-700',
+                  completed: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                  cancelled: 'bg-red-500/10 text-red-400 border-red-500/20',
+                  searching: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+                  accepted: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                  arriving: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+                  started: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+                };
+                const labels = { all: 'Hammasi', completed: 'Tugallangan', cancelled: 'Bekor qilingan', searching: 'Qidirilmoqda', accepted: 'Qabul qilingan', arriving: 'Kelyapti', started: 'Boshlangan' };
+                return (
+                  <span key={st} className={`text-[11px] font-bold uppercase tracking-wider py-1.5 px-3 rounded-lg border ${colors[st]}`}>
+                    {labels[st]} ({count})
+                  </span>
+                );
+              })}
+            </div>
+
+            {/* Rides list */}
+            <div className="space-y-3">
+              {ridesList.length === 0 && (
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center">
+                  <History size={40} className="text-slate-700 mx-auto mb-4" />
+                  <p className="text-slate-500 text-sm">Safarlar tarixi hali bo'sh</p>
+                </div>
+              )}
+
+              {ridesList.map((ride) => {
+                const isExpanded = expandedRide === ride._id;
+                const statusColors = {
+                  completed: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                  cancelled: 'bg-red-500/10 text-red-400 border-red-500/20',
+                  searching: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+                  accepted: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                  arriving: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+                  started: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+                };
+                const statusLabels = { completed: 'Tugallangan', cancelled: 'Bekor qilingan', searching: 'Qidirilmoqda', accepted: 'Qabul qilingan', arriving: 'Kelyapti', started: 'Boshlangan' };
+                const tariffColors = { standart: 'text-green-400', komfort: 'text-yellow-400', biznes: 'text-red-400' };
+                const tariffIcons = { standart: '🟢', komfort: '🟡', biznes: '🔴' };
+
+                return (
+                  <div
+                    key={ride._id}
+                    className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all duration-200 hover:border-slate-700"
+                  >
+                    {/* Collapsed header row */}
+                    <button
+                      onClick={() => setExpandedRide(isExpanded ? null : ride._id)}
+                      className="w-full flex items-center justify-between p-5 text-left hover:bg-slate-800/30 transition"
+                    >
+                      <div className="flex items-center space-x-4 flex-1 min-w-0">
+                        {/* Status badge */}
+                        <span className={`text-[10px] font-bold uppercase tracking-wider py-1 px-2.5 rounded border whitespace-nowrap ${statusColors[ride.status] || 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                          {statusLabels[ride.status] || ride.status}
+                        </span>
+
+                        {/* Route summary */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 text-sm">
+                            <span className="text-emerald-400">A</span>
+                            <span className="text-slate-300 truncate max-w-[200px]">{ride.pickup?.address || 'Noma\'lum'}</span>
+                            <span className="text-slate-600">→</span>
+                            <span className="text-red-400">B</span>
+                            <span className="text-slate-300 truncate max-w-[200px]">{ride.destination?.address || 'Noma\'lum'}</span>
+                          </div>
+                        </div>
+
+                        {/* Price */}
+                        <span className="text-green-400 font-bold text-sm whitespace-nowrap">
+                          {ride.price?.toLocaleString()} UZS
+                        </span>
+
+                        {/* Tariff */}
+                        <span className={`text-xs font-semibold capitalize whitespace-nowrap ${tariffColors[ride.tariff] || 'text-slate-400'}`}>
+                          {tariffIcons[ride.tariff] || ''} {ride.tariff}
+                        </span>
+
+                        {/* Date */}
+                        <span className="text-slate-500 text-xs whitespace-nowrap">
+                          {new Date(ride.createdAt).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </span>
+                      </div>
+
+                      {isExpanded ? <ChevronUp size={18} className="text-slate-500 ml-3 shrink-0" /> : <ChevronDown size={18} className="text-slate-500 ml-3 shrink-0" />}
+                    </button>
+
+                    {/* Expanded details */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-800 p-6 bg-slate-950/50 space-y-6">
+                        {/* Route details */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center">
+                              <Route size={14} className="mr-2 text-green-400" />
+                              Marshrut Ma'lumotlari
+                            </h4>
+                            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                              <div>
+                                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">A — Jo'nash nuqtasi</span>
+                                <p className="text-slate-200 text-sm mt-1">{ride.pickup?.address || 'Noma\'lum'}</p>
+                                <p className="text-slate-600 text-[10px] font-mono mt-0.5">
+                                  {ride.pickup?.lat?.toFixed(6)}, {ride.pickup?.lng?.toFixed(6)}
+                                </p>
+                              </div>
+                              <div className="border-t border-slate-800 pt-3">
+                                <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">B — Borish nuqtasi</span>
+                                <p className="text-slate-200 text-sm mt-1">{ride.destination?.address || 'Noma\'lum'}</p>
+                                <p className="text-slate-600 text-[10px] font-mono mt-0.5">
+                                  {ride.destination?.lat?.toFixed(6)}, {ride.destination?.lng?.toFixed(6)}
+                                </p>
+                              </div>
+                              <div className="border-t border-slate-800 pt-3 flex items-center justify-between">
+                                <span className="text-slate-500 text-xs">Masofa:</span>
+                                <span className="text-slate-200 font-bold text-sm">{ride.distance?.toFixed(1)} km</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* People & Contact */}
+                          <div className="space-y-4">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center">
+                              <Phone size={14} className="mr-2 text-green-400" />
+                              Ishtirokchilar
+                            </h4>
+                            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                              {/* User info */}
+                              <div>
+                                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">👤 Yo'lovchi</span>
+                                <div className="flex items-center justify-between mt-1.5">
+                                  <p className="text-slate-200 text-sm font-semibold">
+                                    {ride.userId?.name || 'Noma\'lum'} {ride.userId?.surname || ''}
+                                  </p>
+                                  <a href={`tel:${ride.userId?.phone}`} className="text-green-400 text-xs font-mono bg-green-500/10 py-1 px-2 rounded border border-green-500/20 hover:bg-green-500/20 transition">
+                                    📞 {ride.userId?.phone || 'Raqam yo\'q'}
+                                  </a>
+                                </div>
+                              </div>
+
+                              <div className="border-t border-slate-800 pt-3">
+                                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">🚘 Haydovchi</span>
+                                {ride.driverId ? (
+                                  <div className="mt-1.5">
+                                    <div className="flex items-center justify-between">
+                                      <p className="text-slate-200 text-sm font-semibold">
+                                        {ride.driverId.name} {ride.driverId.surname}
+                                      </p>
+                                      <a href={`tel:${ride.driverId.phone}`} className="text-green-400 text-xs font-mono bg-green-500/10 py-1 px-2 rounded border border-green-500/20 hover:bg-green-500/20 transition">
+                                        📞 {ride.driverId.phone}
+                                      </a>
+                                    </div>
+                                    {ride.driverId.carInfo && (
+                                      <p className="text-slate-500 text-xs mt-1">
+                                        🚗 {ride.driverId.carInfo.color} {ride.driverId.carInfo.make} {ride.driverId.carInfo.model} — <span className="font-mono">{ride.driverId.carInfo.plateNumber}</span>
+                                      </p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <p className="text-slate-500 text-xs mt-1">Haydovchi tayinlanmagan</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Financial + Status + Timestamps */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {/* Financial */}
+                          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3">💰 Moliyaviy</span>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-500 text-xs">Narx:</span>
+                                <span className="text-green-400 font-bold">{ride.price?.toLocaleString()} UZS</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-500 text-xs">Tarif:</span>
+                                <span className={`font-semibold text-sm capitalize ${tariffColors[ride.tariff] || 'text-slate-300'}`}>
+                                  {tariffIcons[ride.tariff]} {ride.tariff}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-500 text-xs">Masofa:</span>
+                                <span className="text-slate-200 text-sm">{ride.distance?.toFixed(1)} km</span>
+                              </div>
+                              {ride.rating > 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-500 text-xs">Baho:</span>
+                                  <span className="text-amber-400 text-sm">⭐️ {ride.rating}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Options */}
+                          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3">⚙️ Parametrlar</span>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-500 text-xs">Konditsioner:</span>
+                                <span className={`text-xs font-semibold ${ride.options?.ac ? 'text-green-400' : 'text-slate-600'}`}>
+                                  {ride.options?.ac ? '✅ Ha' : '❌ Yo\'q'}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-500 text-xs">Yuk (Bagaj):</span>
+                                <span className={`text-xs font-semibold ${ride.options?.luggage ? 'text-green-400' : 'text-slate-600'}`}>
+                                  {ride.options?.luggage ? '✅ Ha' : '❌ Yo\'q'}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-500 text-xs">Holat:</span>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider py-0.5 px-2 rounded border ${statusColors[ride.status] || 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                                  {statusLabels[ride.status] || ride.status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Timestamps */}
+                          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-3 flex items-center">
+                              <Clock size={12} className="mr-1.5" /> Vaqt Jadvali
+                            </span>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-500 text-xs">Yaratilgan:</span>
+                                <span className="text-slate-300 text-xs font-mono">
+                                  {new Date(ride.createdAt).toLocaleString('uz-UZ')}
+                                </span>
+                              </div>
+                              {ride.acceptedAt && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-500 text-xs">Qabul qilingan:</span>
+                                  <span className="text-slate-300 text-xs font-mono">
+                                    {new Date(ride.acceptedAt).toLocaleString('uz-UZ')}
+                                  </span>
+                                </div>
+                              )}
+                              {ride.startedAt && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-500 text-xs">Boshlangan:</span>
+                                  <span className="text-slate-300 text-xs font-mono">
+                                    {new Date(ride.startedAt).toLocaleString('uz-UZ')}
+                                  </span>
+                                </div>
+                              )}
+                              {ride.completedAt && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-500 text-xs">Tugallangan:</span>
+                                  <span className="text-emerald-400 text-xs font-mono">
+                                    {new Date(ride.completedAt).toLocaleString('uz-UZ')}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ride ID */}
+                        <div className="text-right">
+                          <span className="text-slate-600 text-[10px] font-mono">ID: {ride._id}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
