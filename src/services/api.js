@@ -37,6 +37,11 @@ const request = async (endpoint, options = {}) => {
 };
 
 export const api = {
+  adminLogin: (login, password) => request('/auth/admin-login', {
+    method: 'POST',
+    body: JSON.stringify({ login, password }),
+  }),
+
   requestOTP: (phone) => request('/auth/otp', {
     method: 'POST',
     body: JSON.stringify({ phone }),

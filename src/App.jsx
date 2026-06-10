@@ -23,10 +23,8 @@ export default function App() {
   const [adminUser, setAdminUser] = useState(null);
   
   // Login flow states
-  const [loginStep, setLoginStep] = useState('phone'); // phone, otp
-  const [phone, setPhone] = useState('+998902710027'); // Default to demo seeded admin phone
-  const [otpCode, setOtpCode] = useState('');
-  const [devCode, setDevCode] = useState('');
+  const [loginName, setLoginName] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -395,45 +393,18 @@ export default function App() {
     }
   };
 
-  // OTP Login Handling
-  const handleRequestOTP = async (e) => {
+  // Admin Login Handling (username/password)
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
-    if (phone.length < 12) {
-      setError('Telefon raqam noto\'g\'ri');
+    if (!loginName || !loginPassword) {
+      setError('Login va parolni kiriting');
       return;
     }
     setError('');
     setLoading(true);
 
     try {
-      // Auto seed db to guarantee admin account exists
-      await api.triggerSeed();
-
-      const res = await api.requestOTP(phone);
-      if (res.success) {
-        setDevCode(res.devOTP || '');
-        setLoginStep('otp');
-      } else {
-        setError(res.message);
-      }
-    } catch (err) {
-      setError(err.message || 'OTP yuborishda xatolik');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async (e) => {
-    e.preventDefault();
-    if (otpCode.length < 6) {
-      setError('Kod 6 xonali bo\'lishi kerak');
-      return;
-    }
-    setError('');
-    setLoading(true);
-
-    try {
-      const res = await api.verifyOTP(phone, otpCode);
+      const res = await api.adminLogin(loginName, loginPassword);
       if (res.success) {
         if (res.user.role !== 'admin') {
           setError('Kirish taqiqlandi. Ushbu hisob administrator emas.');
@@ -445,7 +416,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      setError(err.message || 'Kodni tasdiqlash xatoligi');
+      setError(err.message || 'Tizimga kirishda xatolik');
     } finally {
       setLoading(false);
     }
@@ -556,8 +527,8 @@ export default function App() {
     setToken(null);
     setIsLoggedIn(false);
     setAdminUser(null);
-    setLoginStep('phone');
-    setOtpCode('');
+    setLoginName('');
+    setLoginPassword('');
   };
 
   // Seed DB manual trigger helper
@@ -595,80 +566,43 @@ export default function App() {
             <p className="text-slate-400 text-sm mt-2">Administrator Boshqaruv Paneli</p>
           </div>
 
-          {loginStep === 'phone' ? (
-            <form onSubmit={handleRequestOTP} className="space-y-6">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                  Admin Telefon Raqami
-                </label>
-                <input
-                  type="text"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-slate-950 text-slate-100 placeholder-slate-700 border border-slate-800 rounded-xl py-3 px-4 focus:ring-2 focus:ring-green-400 focus:outline-none text-lg"
-                  placeholder="+998902710027"
-                />
-              </div>
+          <form onSubmit={handleAdminLogin} className="space-y-6">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Login
+              </label>
+              <input
+                type="text"
+                value={loginName}
+                onChange={(e) => setLoginName(e.target.value)}
+                className="w-full bg-slate-950 text-slate-100 placeholder-slate-700 border border-slate-800 rounded-xl py-3 px-4 focus:ring-2 focus:ring-green-400 focus:outline-none text-lg"
+                placeholder="Login kiriting"
+              />
+            </div>
 
-              {error && <div className="text-red-400 text-sm">{error}</div>}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Parol
+              </label>
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                className="w-full bg-slate-950 text-slate-100 placeholder-slate-700 border border-slate-800 rounded-xl py-3 px-4 focus:ring-2 focus:ring-green-400 focus:outline-none text-lg"
+                placeholder="••••••••"
+              />
+            </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-green-400 hover:bg-green-500 text-slate-950 font-bold py-3 px-4 rounded-xl transition duration-150 flex items-center justify-center"
-              >
-                {loading ? <Loader2 className="animate-spin mr-2" size={18} /> : 'Kodni olish'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOTP} className="space-y-6">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                  SMS Tasdiqlash Kodi
-                </label>
-                <input
-                  type="text"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
-                  className="w-full bg-slate-950 text-slate-100 placeholder-slate-700 border border-slate-800 rounded-xl py-3 px-4 focus:ring-2 focus:ring-green-400 focus:outline-none text-center text-2xl tracking-widest"
-                  placeholder="123456"
-                  maxLength={6}
-                />
-              </div>
+            {error && <div className="text-red-400 text-sm">{error}</div>}
 
-              {devCode && (
-                <div className="bg-green-950/20 border border-green-500/30 rounded-lg p-3 text-center">
-                  <span className="text-[11px] text-green-400 font-bold block uppercase tracking-wider mb-1">
-                    🛠️ DEV SMS MOCK
-                  </span>
-                  <span className="text-slate-200 font-mono text-lg">{devCode}</span>
-                </div>
-              )}
-
-              {error && <div className="text-red-400 text-sm text-center">{error}</div>}
-
-              <div className="flex space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setLoginStep('phone')}
-                  className="w-1/3 bg-slate-800 hover:bg-slate-750 text-slate-200 py-3 rounded-xl transition font-medium"
-                >
-                  Orqaga
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-2/3 bg-green-400 hover:bg-green-500 text-slate-950 font-bold py-3 rounded-xl transition flex items-center justify-center"
-                >
-                  {loading ? <Loader2 className="animate-spin mr-2" size={18} /> : 'Tizimga kirish'}
-                </button>
-              </div>
-            </form>
-          )}
-
-          <p className="text-center text-xs text-slate-600 mt-8">
-            Seeded Admin telefon raqami: <b>+998902710027</b>
-          </p>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-green-400 hover:bg-green-500 text-slate-950 font-bold py-3 px-4 rounded-xl transition duration-150 flex items-center justify-center"
+            >
+              {loading ? <Loader2 className="animate-spin mr-2" size={18} /> : 'Tizimga kirish'}
+            </button>
+          </form>
         </div>
       </div>
     );
