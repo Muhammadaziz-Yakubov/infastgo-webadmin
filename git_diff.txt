@@ -1,0 +1,444 @@
+﻿commit cead4baefc4dff37b716eacde943aeb053be66e0
+Author: unknown <muhammadazizyaqubov2@gmail.com>
+Date:   Wed Jun 10 23:27:55 2026 -0700
+
+    Comission System
+
+diff --git a/src/App.jsx b/src/App.jsx
+index 0c14536..b6776e8 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -14,6 +14,11 @@ import {
+   ShieldCheck,
+   Send,
+   Loader2,
++  DollarSign,
++  Sliders,
++  Search,
++  ArrowUpDown,
++  AlertTriangle,
+ } from 'lucide-react';
+ import { api, setToken, getToken } from './services/api';
+ import { io } from 'socket.io-client';
+@@ -38,6 +43,16 @@ export default function App() {
+   const [usersList, setUsersList] = useState([]);
+   const [driversList, setDriversList] = useState([]);
+   const [liveRides, setLiveRides] = useState([]);
++
++  // Commission & Debt states
++  const [settings, setSettings] = useState({ commissionPercent: 10, warningDebtLimit: 50000, blockDebtLimit: 100000 });
++  const [commissionStats, setCommissionStats] = useState({ totalCommissionEarned: 0, totalOutstandingDebt: 0, totalPaidDebt: 0, blockedDrivers: 0, warningDrivers: 0 });
++  const [debtDriversList, setDebtDriversList] = useState([]);
++  const [debtSearch, setDebtSearch] = useState('');
++  const [debtPage, setDebtPage] = useState(1);
++  const [debtTotalPages, setDebtTotalPages] = useState(1);
++  const [debtSortBy, setDebtSortBy] = useState('desc');
++  const [debtTotal, setDebtTotal] = useState(0);
+   const [pricing, setPricing] = useState({
+     tariffs: {
+       standart: { baseFare: 5000, pricePerKm: 1500 },
+@@ -293,6 +308,11 @@ export default function App() {
+       fetchLiveTracking();
+     } else if (activeTab === 'pricing') {
+       fetchPricingData();
++    } else if (activeTab === 'commission_debts') {
++      fetchCommissionStats();
++      fetchDriversDebts(1, debtSearch, debtSortBy);
++    } else if (activeTab === 'system_settings') {
++      fetchSettings();
+     }
+   }, [isLoggedIn, activeTab]);
+ 
+@@ -300,8 +320,9 @@ export default function App() {
+   useEffect(() => {
+     if (!isLoggedIn || !adminUser) return;
+ 
+-    // Connect socket
+-    const s = io('https://infastgo-backendd.onrender.com');
++    // Connect socket dynamically based on API base URL
++    const socketUrl = api.baseUrl ? api.baseUrl.replace('/api', '') : 'https://infastgo-backendd.onrender.com';
++    const s = io(socketUrl);
+     setSocket(s);
+ 
+     s.on('connect', () => {
+@@ -337,6 +358,30 @@ export default function App() {
+       );
+     });
+ 
++    s.on('driverDebtUpdate', (data) => {
++      console.log('[Admin Socket] Driver debt update received:', data);
++      
++      // Update debt drivers list if current driver is in it
++      setDebtDriversList((prev) =>
++        prev.map((drv) =>
++          drv._id === data.driverId
++            ? {
++                ...drv,
++                balance: data.balance,
++                debt: Math.abs(data.balance),
++                isBlocked: data.isBlocked,
++                totalCommission: data.totalCommission,
++                status: data.status,
++              }
++            : drv
++        )
++      );
++
++      // Refresh commission stats and dashboard stats
++      fetchCommissionStats();
++      fetchDashboardData();
++    });
++
+     s.on('disconnect', () => {
+       console.log('[Admin Socket] Disconnected');
+     });
+@@ -395,6 +440,75 @@ export default function App() {
+     }
+   };
+ 
++  const fetchSettings = async () => {
++    try {
++      const res = await api.getSettings();
++      if (res.success) setSettings(res.settings);
++    } catch (err) {
++      console.error('Error fetching settings:', err);
++    }
++  };
++
++  const fetchCommissionStats = async () => {
++    try {
++      const res = await api.getCommissionsStats();
++      if (res.success) setCommissionStats(res.statistics);
++    } catch (err) {
++      console.error('Error fetching commission stats:', err);
++    }
++  };
++
++  const fetchDriversDebts = async (page = 1, search = debtSearch, sortBy = debtSortBy) => {
++    try {
++      const res = await api.getDriversDebts({
++        page,
++        search,
++        sortByDebt: sortBy,
++      });
++      if (res.success) {
++        setDebtDriversList(res.drivers);
++        setDebtPage(res.pagination.page);
++        setDebtTotalPages(res.pagination.pages);
++        setDebtTotal(res.pagination.total);
++      }
++    } catch (err) {
++      console.error('Error fetching drivers debts:', err);
++    }
++  };
++
++  const handleUpdateSettings = async (e) => {
++    e.preventDefault();
++    setLoading(true);
++    
++    // Validate Settings client-side
++    if (settings.commissionPercent < 0 || settings.commissionPercent > 100) {
++      alert("Komissiya foizi 0 va 100 oralig'ida bo'lishi kerak!");
++      setLoading(false);
++      return;
++    }
++    if (settings.warningDebtLimit < 0) {
++      alert("Ogohlantirish limiti 0 dan katta yoki teng bo'lishi kerak!");
++      setLoading(false);
++      return;
++    }
++    if (settings.blockDebtLimit <= settings.warningDebtLimit) {
++      alert("Bloklash limiti ogohlantirish limitidan katta bo'lishi kerak!");
++      setLoading(false);
++      return;
++    }
++
++    try {
++      const res = await api.updateSettings(settings);
++      if (res.success) {
++        alert('Tizim sozlamalari muvaffaqiyatli saqlandi!');
++      }
++    } catch (err) {
++      alert(err.message || 'Xatolik yuz berdi');
++    } finally {
++      setLoading(false);
++    }
++  };
++
+   // OTP Login Handling
+   const handleRequestOTP = async (e) => {
+     e.preventDefault();
+@@ -760,6 +874,30 @@ export default function App() {
+               <Bell size={18} />
+               <span>Push Xabarlar</span>
+             </button>
++
++            <button
++              onClick={() => setActiveTab('commission_debts')}
++              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition font-medium text-sm ${
++                activeTab === 'commission_debts'
++                  ? 'bg-green-500/10 text-green-400 border border-green-500/20'
++                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 border border-transparent'
++              }`}
++            >
++              <DollarSign size={18} />
++              <span>Komissiya & Qarzlar</span>
++            </button>
++
++            <button
++              onClick={() => setActiveTab('system_settings')}
++              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition font-medium text-sm ${
++                activeTab === 'system_settings'
++                  ? 'bg-green-500/10 text-green-400 border border-green-500/20'
++                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 border border-transparent'
++              }`}
++            >
++              <Sliders size={18} />
++              <span>Tizim Sozlamalari</span>
++            </button>
+           </nav>
+         </div>
+ 
+@@ -1536,6 +1674,242 @@ export default function App() {
+             </div>
+           </div>
+         )}
++        {activeTab === 'commission_debts' && (
++          <div className="space-y-8">
++            <div className="flex items-center justify-between">
++              <div>
++                <h2 className="text-2xl font-bold tracking-tight">Komissiya & Qarzlar Boshqaruvi</h2>
++                <p className="text-slate-400 text-sm">Haydovchilar qarzdorligi va platforma komissiyalari hisobi</p>
++              </div>
++              <button
++                onClick={() => {
++                  fetchCommissionStats();
++                  fetchDriversDebts(1);
++                }}
++                className="bg-slate-900 border border-slate-800 text-slate-300 py-2.5 px-4 rounded-xl hover:bg-slate-800 text-sm transition"
++              >
++                Yangilash
++              </button>
++            </div>
++
++            {/* Commission Stats Grid */}
++            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
++              <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg relative overflow-hidden">
++                <p className="text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Jami Komissiya</p>
++                <h3 className="text-2xl font-bold text-green-400">
++                  {commissionStats.totalCommissionEarned?.toLocaleString() || 0} <span className="text-xs font-normal">UZS</span>
++                </h3>
++              </div>
++              <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg relative overflow-hidden">
++                <p className="text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Faol Qarzlar</p>
++                <h3 className="text-2xl font-bold text-red-400">
++                  {commissionStats.totalOutstandingDebt?.toLocaleString() || 0} <span className="text-xs font-normal">UZS</span>
++                </h3>
++              </div>
++              <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg relative overflow-hidden">
++                <p className="text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">To'langan Qarzlar</p>
++                <h3 className="text-2xl font-bold text-blue-400">
++                  {commissionStats.totalPaidDebt?.toLocaleString() || 0} <span className="text-xs font-normal">UZS</span>
++                </h3>
++              </div>
++              <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg relative overflow-hidden">
++                <p className="text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Bloklanganlar</p>
++                <h3 className="text-2xl font-bold text-amber-500">
++                  {commissionStats.blockedDrivers || 0} <span className="text-xs font-normal">haydovchi</span>
++                </h3>
++              </div>
++              <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg relative overflow-hidden">
++                <p className="text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Ogohlantirishda</p>
++                <h3 className="text-2xl font-bold text-yellow-400">
++                  {commissionStats.warningDrivers || 0} <span className="text-xs font-normal">haydovchi</span>
++                </h3>
++              </div>
++            </div>
++
++            {/* Drivers list table */}
++            <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden p-6 space-y-6">
++              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
++                <div className="relative flex-1 max-w-md">
++                  <Search className="absolute left-3.5 top-3.5 text-slate-500" size={18} />
++                  <input
++                    type="text"
++                    value={debtSearch}
++                    onChange={(e) => {
++                      setDebtSearch(e.target.value);
++                      fetchDriversDebts(1, e.target.value, debtSortBy);
++                    }}
++                    className="w-full bg-slate-950 text-slate-100 placeholder-slate-700 border border-slate-800 rounded-xl py-2.5 pl-11 pr-4 focus:ring-1 focus:ring-green-400 focus:outline-none text-sm"
++                    placeholder="Qidiruv: Haydovchi nomi yoki telefon..."
++                  />
++                </div>
++
++                <div className="flex items-center space-x-3">
++                  <span className="text-xs text-slate-400 font-medium">Qarz bo'yicha:</span>
++                  <button
++                    type="button"
++                    onClick={() => {
++                      const nextSort = debtSortBy === 'desc' ? 'asc' : 'desc';
++                      setDebtSortBy(nextSort);
++                      fetchDriversDebts(1, debtSearch, nextSort);
++                    }}
++                    className="flex items-center space-x-2 bg-slate-950 border border-slate-800 text-slate-300 py-2 px-4 rounded-xl hover:bg-slate-900 text-xs font-medium transition"
++                  >
++                    <ArrowUpDown size={14} />
++                    <span>{debtSortBy === 'desc' ? "Ko'pdan kamga" : "Kamdan ko'pga"}</span>
++                  </button>
++                </div>
++              </div>
++
++              {/* Table */}
++              <div className="overflow-x-auto">
++                <table className="w-full text-left border-collapse text-sm">
++                  <thead>
++                    <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
++                      <th className="pb-4 font-semibold">Haydovchi</th>
++                      <th className="pb-4 font-semibold">Telefon</th>
++                      <th className="pb-4 font-semibold text-right">Qarzdorlik (Debt)</th>
++                      <th className="pb-4 font-semibold text-right">Jami Komissiya</th>
++                      <th className="pb-4 font-semibold text-center">Holat</th>
++                      <th className="pb-4 font-semibold text-right">Ro'yxatdan o'tgan</th>
++                    </tr>
++                  </thead>
++                  <tbody>
++                    {debtDriversList.map((driver) => (
++                      <tr key={driver._id} className="border-b border-slate-850 hover:bg-slate-800/20 transition">
++                        <td className="py-4 font-semibold text-slate-200">{driver.name} {driver.surname}</td>
++                        <td className="py-4 text-slate-400 font-mono">{driver.phone}</td>
++                        <td className="py-4 text-right font-bold font-mono text-red-405">
++                          {driver.debt?.toLocaleString() || 0} UZS
++                        </td>
++                        <td className="py-4 text-right font-mono text-slate-300">
++                          {driver.totalCommission?.toLocaleString() || 0} UZS
++                        </td>
++                        <td className="py-4 text-center">
++                          <span className={`inline-block py-1 px-3 rounded-full text-xs font-extrabold tracking-wide ${
++                            driver.status === 'BLOCKED'
++                              ? 'bg-red-500/10 text-red-400 border border-red-500/20'
++                              : driver.status === 'WARNING'
++                              ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20'
++                              : 'bg-green-500/10 text-green-400 border border-green-500/20'
++                          }`}>
++                            {driver.status}
++                          </span>
++                        </td>
++                        <td className="py-4 text-right text-slate-500 text-xs">
++                          {new Date(driver.createdAt).toLocaleDateString()}
++                        </td>
++                      </tr>
++                    ))}
++                    {debtDriversList.length === 0 && (
++                      <tr>
++                        <td colSpan="6" className="py-8 text-center text-slate-550">
++                          Haydovchilar topilmadi.
++                        </td>
++                      </tr>
++                    )}
++                  </tbody>
++                </table>
++              </div>
++
++              {/* Pagination */}
++              {debtTotalPages > 1 && (
++                <div className="flex items-center justify-between pt-4 border-t border-slate-800 text-xs text-slate-450">
++                  <span>Jami: {debtTotal} ta haydovchi</span>
++                  <div className="flex space-x-2">
++                    <button
++                      type="button"
++                      disabled={debtPage === 1}
++                      onClick={() => fetchDriversDebts(debtPage - 1, debtSearch, debtSortBy)}
++                      className="bg-slate-950 border border-slate-800 py-1.5 px-3 rounded-lg hover:bg-slate-900 disabled:opacity-50 transition"
++                    >
++                      Oldingi
++                    </button>
++                    <span className="py-1.5 px-3 font-semibold text-slate-300">
++                      {debtPage} / {debtTotalPages}
++                    </span>
++                    <button
++                      type="button"
++                      disabled={debtPage === debtTotalPages}
++                      onClick={() => fetchDriversDebts(debtPage + 1, debtSearch, debtSortBy)}
++                      className="bg-slate-950 border border-slate-800 py-1.5 px-3 rounded-lg hover:bg-slate-900 disabled:opacity-50 transition"
++                    >
++                      Keyingi
++                    </button>
++                  </div>
++                </div>
++              )}
++            </div>
++          </div>
++        )}
++
++        {activeTab === 'system_settings' && (
++          <div className="space-y-8">
++            <div>
++              <h2 className="text-2xl font-bold tracking-tight">Tizim Sozlamalari</h2>
++              <p className="text-slate-400 text-sm">Komissiya foizlari va qarzdorlik limitlarini boshqarish</p>
++            </div>
++
++            <div className="max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg">
++              <form onSubmit={handleUpdateSettings} className="space-y-6">
++                <div>
++                  <label className="block text-xs font-semibold text-slate-455 uppercase tracking-wider mb-2">
++                    Komissiya Foizi (%)
++                  </label>
++                  <div className="flex items-center space-x-4">
++                    <input
++                      type="range"
++                      min="0"
++                      max="100"
++                      value={settings.commissionPercent}
++                      onChange={(e) => setSettings({ ...settings, commissionPercent: parseInt(e.target.value) || 0 })}
++                      className="w-full accent-green-400 bg-slate-950"
++                    />
++                    <span className="text-lg font-bold text-green-400 w-12 text-right">
++                      {settings.commissionPercent}%
++                    </span>
++                  </div>
++                </div>
++
++                <div className="grid grid-cols-2 gap-4">
++                  <div>
++                    <label className="block text-xs font-semibold text-slate-455 uppercase tracking-wider mb-2">
++                      Ogohlantirish Limiti (UZS)
++                    </label>
++                    <input
++                      type="number"
++                      min="0"
++                      value={settings.warningDebtLimit}
++                      onChange={(e) => setSettings({ ...settings, warningDebtLimit: parseInt(e.target.value) || 0 })}
++                      className="w-full bg-slate-950 text-slate-100 border border-slate-800 rounded-xl py-2.5 px-3.5 focus:ring-1 focus:ring-green-400 focus:outline-none text-sm"
++                      required
++                    />
++                  </div>
++                  <div>
++                    <label className="block text-xs font-semibold text-slate-455 uppercase tracking-wider mb-2">
++                      Bloklash Limiti (UZS)
++                    </label>
++                    <input
++                      type="number"
++                      min="0"
++                      value={settings.blockDebtLimit}
++                      onChange={(e) => setSettings({ ...settings, blockDebtLimit: parseInt(e.target.value) || 0 })}
++                      className="w-full bg-slate-950 text-slate-100 border border-slate-800 rounded-xl py-2.5 px-3.5 focus:ring-1 focus:ring-green-400 focus:outline-none text-sm"
++                      required
++                    />
++                  </div>
++                </div>
++
++                <button
++                  type="submit"
++                  disabled={loading}
++                  className="w-full bg-green-400 hover:bg-green-500 text-slate-950 font-bold py-3 rounded-xl transition duration-150 text-sm flex items-center justify-center"
++                >
++                  {loading ? <Loader2 className="animate-spin mr-2" size={18} /> : 'Sozlamalarni saqlash'}
++                </button>
++              </form>
++            </div>
++          </div>
++        )}
+       </main>
+     </div>
+   );
