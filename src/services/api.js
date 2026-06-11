@@ -104,6 +104,10 @@ export const api = {
     return request(`/admin/drivers/debts?${searchParams.toString()}`);
   },
   getCommissionsStats: () => request('/admin/statistics/commissions'),
+  adjustDriverBalance: (driverId, amount, note) => request(`/admin/drivers/${driverId}/balance`, {
+    method: 'PUT',
+    body: JSON.stringify({ amount, note }),
+  }),
   
   // Seeding trigger for quick local dev setup
   triggerSeed: () => request('/seed', { method: 'POST', headers: {} }).catch(() => null),

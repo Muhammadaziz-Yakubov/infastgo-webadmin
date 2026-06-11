@@ -58,6 +58,11 @@ export default function App() {
   const [debtTotalPages, setDebtTotalPages] = useState(1);
   const [debtSortBy, setDebtSortBy] = useState('desc');
   const [debtTotal, setDebtTotal] = useState(0);
+  // Balance adjustment modal state
+  const [balanceModal, setBalanceModal] = useState(null); // { _id, name, surname, balance }
+  const [balanceAdjAmount, setBalanceAdjAmount] = useState('');
+  const [balanceAdjNote, setBalanceAdjNote] = useState('');
+  const [balanceAdjLoading, setBalanceAdjLoading] = useState(false);
   const [expandedRide, setExpandedRide] = useState(null);
   const [pricing, setPricing] = useState({
     tariffs: {
@@ -510,6 +515,31 @@ export default function App() {
       alert(err.message || 'Xatolik yuz berdi');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAdjustBalance = async (e) => {
+    e.preventDefault();
+    const amt = parseFloat(balanceAdjAmount);
+    if (isNaN(amt)) {
+      alert('To\'g\'ri summa kiriting');
+      return;
+    }
+    setBalanceAdjLoading(true);
+    try {
+      const res = await api.adjustDriverBalance(balanceModal._id, amt, balanceAdjNote);
+      if (res.success) {
+        alert(`Balans yangilandi! Yangi balans: ${res.driver.balance.toLocaleString()} UZS`);
+        setBalanceModal(null);
+        setBalanceAdjAmount('');
+        setBalanceAdjNote('');
+        fetchDriversDebts(debtPage, debtSearch, debtSortBy);
+        fetchCommissionStats();
+      }
+    } catch (err) {
+      alert(err.message || 'Xatolik yuz berdi');
+    } finally {
+      setBalanceAdjLoading(false);
     }
   };
 
@@ -1990,10 +2020,10 @@ export default function App() {
                     <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
                       <th className="pb-4 font-semibold">Haydovchi</th>
                       <th className="pb-4 font-semibold">Telefon</th>
-                      <th className="pb-4 font-semibold text-right">Qarzdorlik (Debt)</th>
+                      <th className="pb-4 font-semibold text-right">Balans</th>
                       <th className="pb-4 font-semibold text-right">Jami Komissiya</th>
                       <th className="pb-4 font-semibold text-center">Holat</th>
-                      <th className="pb-4 font-semibold text-right">Ro'yxatdan o'tgan</th>
+                      <th className="pb-4 font-semibold text-right">Amal</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2001,7 +2031,7 @@ export default function App() {
                       <tr key={driver._id} className="border-b border-slate-800 hover:bg-slate-800/20 transition">
                         <td className="py-4 font-semibold text-slate-200">{driver.name} {driver.surname}</td>
                         <td className="py-4 text-slate-400 font-mono">{driver.phone}</td>
-                        <td className="py-4 text-right font-bold font-mono text-red-400">{driver.debt?.toLocaleString() || 0} UZS</td>
+                        <td className={`py-4 text-right font-bold font-mono ${(driver.balance || 0) < 0 ? 'text-red-400' : 'text-green-400'}`}>{(driver.balance || 0).toLocaleString()} UZS</td>
                         <td className="py-4 text-right font-mono text-slate-300">{driver.totalCommission?.toLocaleString() || 0} UZS</td>
                         <td className="py-4 text-center">
                           <span className={`inline-block py-1 px-3 rounded-full text-xs font-extrabold tracking-wide ${
@@ -2010,7 +2040,19 @@ export default function App() {
                             : 'bg-green-500/10 text-green-400 border border-green-500/20'
                           }`}>{driver.status}</span>
                         </td>
-                        <td className="py-4 text-right text-slate-500 text-xs">{new Date(driver.createdAt).toLocaleDateString()}</td>
+                        <td className="py-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBalanceModal(driver);
+                              setBalanceAdjAmount('');
+                              setBalanceAdjNote('');
+                            }}
+                            className="bg-green-500/10 text-green-400 border border-green-500/20 py-1.5 px-3 rounded-lg text-xs font-semibold hover:bg-green-500/20 transition"
+                          >
+                            Balans
+                          </button>
+                        </td>
                       </tr>
                     ))}
                     {debtDriversList.length === 0 && (
@@ -2030,6 +2072,50 @@ export default function App() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Balance Adjustment Modal */}
+        {balanceModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+              <h3 className="text-lg font-bold mb-1">{balanceModal.name} {balanceModal.surname}</h3>
+              <p className="text-slate-400 text-sm mb-1">Joriy balans: <span className={`font-bold ${(balanceModal.balance || 0) < 0 ? 'text-red-400' : 'text-green-400'}`}>{(balanceModal.balance || 0).toLocaleString()} UZS</span></p>
+              <p className="text-slate-500 text-xs mb-5">Balansni to'ldirish uchun musbat (+), ayirish uchun manfiy (-) raqam kiriting.</p>
+              <form onSubmit={handleAdjustBalance} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Summa (UZS)</label>
+                  <div className="flex gap-2 mb-2">
+                    <button type="button" onClick={() => setBalanceAdjAmount(String(-(balanceModal.balance || 0)))} className="text-xs bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1.5 rounded-lg hover:bg-green-500/20 transition">Qarzni to'liq yopish</button>
+                    <button type="button" onClick={() => setBalanceAdjAmount('0')} className="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-700 transition">Nol qilish</button>
+                  </div>
+                  <input
+                    type="number"
+                    value={balanceAdjAmount}
+                    onChange={(e) => setBalanceAdjAmount(e.target.value)}
+                    placeholder="Masalan: 50000 yoki -10000"
+                    className="w-full bg-slate-950 text-slate-100 border border-slate-700 rounded-xl py-2.5 px-3.5 focus:ring-1 focus:ring-green-400 focus:outline-none text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Izoh (ixtiyoriy)</label>
+                  <input
+                    type="text"
+                    value={balanceAdjNote}
+                    onChange={(e) => setBalanceAdjNote(e.target.value)}
+                    placeholder="Masalan: Naqd to'lov qabul qilindi"
+                    className="w-full bg-slate-950 text-slate-100 border border-slate-700 rounded-xl py-2.5 px-3.5 focus:ring-1 focus:ring-green-400 focus:outline-none text-sm"
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setBalanceModal(null)} className="flex-1 bg-slate-800 text-slate-300 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-700 transition">Bekor qilish</button>
+                  <button type="submit" disabled={balanceAdjLoading} className="flex-1 bg-green-400 hover:bg-green-500 text-slate-950 py-2.5 rounded-xl text-sm font-bold transition flex items-center justify-center">
+                    {balanceAdjLoading ? <Loader2 className="animate-spin" size={18} /> : 'Saqlash'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
