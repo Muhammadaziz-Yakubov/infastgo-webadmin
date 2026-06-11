@@ -88,6 +88,22 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(pushData),
   }),
+
+  // Commission & Debt Management API Methods
+  getSettings: () => request('/admin/settings'),
+  updateSettings: (settingsData) => request('/admin/settings', {
+    method: 'PUT',
+    body: JSON.stringify(settingsData),
+  }),
+  getDriversDebts: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.search) searchParams.append('search', params.search);
+    if (params.page) searchParams.append('page', params.page);
+    if (params.limit) searchParams.append('limit', params.limit);
+    if (params.sortByDebt) searchParams.append('sortByDebt', params.sortByDebt);
+    return request(`/admin/drivers/debts?${searchParams.toString()}`);
+  },
+  getCommissionsStats: () => request('/admin/statistics/commissions'),
   
   // Seeding trigger for quick local dev setup
   triggerSeed: () => request('/seed', { method: 'POST', headers: {} }).catch(() => null),
